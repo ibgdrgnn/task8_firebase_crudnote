@@ -1,44 +1,91 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_crudnote/auth_service.dart';
 import 'package:firebase_crudnote/crud_service.dart';
+import 'package:firebase_crudnote/login_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-class HomePage extends StatelessWidget {
+class HomePage extends StatefulWidget {
+  const HomePage({super.key});
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
   final CrudService service = CrudService();
   final TextEditingController nameCtrl = TextEditingController();
   final TextEditingController qtyCtrl = TextEditingController();
-  HomePage({super.key});
+  bool showFavorites = false;
 
+  @override
+  void dispose() {
+    nameCtrl.dispose();
+    qtyCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey,
       appBar: AppBar(
-        title: const Text('Firebase Lastname'),
+        title: const Text('Firebase Lustre'),
         centerTitle: true,
         backgroundColor: Colors.teal,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: () async {
+              await AuthService().signOut();
+              if (!context.mounted) return;
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => LoginPage()),
+              );
+            },
+          ), // IconButton
+          IconButton(
+            icon: Icon(
+              showFavorites ? Icons.favorite : Icons.favorite_border,
+              color: Colors.white,
+            ),
+            tooltip: showFavorites ? 'Show all items' : 'Show favorites',
+            onPressed: () {
+              setState(() => showFavorites = !showFavorites);
+            },
+          ), // IconButton
+        ],
       ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: Colors.teal,
         child: const Icon(Icons.add, color: Colors.white),
         onPressed: () => openAddDialog(context),
       ),
-      body: StreamBuilder<QuerySnapshot>(
+      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: service.getItems(),
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
-          final docs = snapshot.data!.docs;
+          final allDocs = snapshot.data!.docs;
+          final docs = showFavorites
+              ? allDocs.where((item) => item.data()['favorite'] == true).toList()
+              : allDocs;
           if (docs.isEmpty) {
-            return const Center(child: Text("No items found", style: TextStyle(fontSize: 18)));
+            return Center(
+              child: Text(
+                showFavorites ? "No favorite items found" : "No items found",
+                style: const TextStyle(fontSize: 18),
+              ),
+            );
           }
           return ListView.builder(
             padding: const EdgeInsets.all(8),
             itemCount: docs.length,
             itemBuilder: (context, index) {
-              var item = docs[index];
+              final item = docs[index];
+              final isFavorite = item.data()['favorite'] == true;
               return Card(
                 elevation: 3,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -55,6 +102,15 @@ class HomePage extends StatelessWidget {
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      IconButton(
+                        icon: Icon(
+                          isFavorite ? Icons.favorite : Icons.favorite_border,
+                          color: isFavorite ? Colors.red : Colors.grey,
+                        ),
+                        onPressed: () {
+                          service.updateFavorite(item.id, !isFavorite);
+                        },
+                      ),
                       IconButton(
                         icon: const Icon(Icons.edit, color: Colors.orange),
                         onPressed: () => openEditDialog(context, item),
@@ -150,7 +206,8 @@ class HomePage extends StatelessWidget {
 
   //EDIT UI
 
-  void openEditDialog(BuildContext context, DocumentSnapshot item) {
+  void openEditDialog(
+      BuildContext context, DocumentSnapshot<Map<String, dynamic>> item) {
     nameCtrl.text = item['name'];
     qtyCtrl.text = item['quantity'].toString();
 

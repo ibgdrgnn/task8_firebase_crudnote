@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class CrudService {
-  final CollectionReference items =
+  final CollectionReference<Map<String, dynamic>> items =
       FirebaseFirestore.instance.collection('items');
 
   // CREATE
@@ -10,11 +10,12 @@ class CrudService {
       'name': name,
       'quantity': quantity,
       'createdAt': Timestamp.now(),
+      'favorite': false,
     });
   }
 
   // READ
-  Stream<QuerySnapshot> getItems() {
+  Stream<QuerySnapshot<Map<String, dynamic>>> getItems() {
     return items.orderBy('createdAt', descending: true).snapshots();
   }
 
@@ -24,6 +25,11 @@ class CrudService {
       'name': name,
       'quantity': quantity,
     });
+  }
+
+  // UPDATE FAVORITE
+  Future<void> updateFavorite(String id, bool favorite) {
+    return items.doc(id).update({'favorite': favorite});
   }
 
   // DELETE
